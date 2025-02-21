@@ -1,0 +1,22 @@
+#! /bin/bash
+# A simple wrapper to spill out all installed packages in Debian based systems
+# `pacman -Qq` for Debian ;)
+
+admdir="/var/lib/dpkg"
+qdir="${*}"
+
+if [[ -n ${qdir} ]]; then
+    if [[ ! -d ${qdir}${admdir} ]]; then
+        echo "Usage: ${0##*/} /path/to/debian/root "
+        exit
+    else admdir="${qdir}${admdir}"
+    fi
+fi
+
+tmpfile=`mktemp /tmp/${0##*/}.XXXXXX`
+dpkg-query --admindir=${admdir} --no-pager --list | while read ln; do
+    line=($ln)
+    [[ ${line[0]} == "ii" ]] && echo "${line[1]}" >> ${tmpfile}
+done
+
+cat ${tmpfile} && rm ${tmpfile}
