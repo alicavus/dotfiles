@@ -33,7 +33,7 @@ for fnt in .ttf .ttc .otf; do
     find "${GOOGLE_FONTS_DIR}" -iname *$fnt | while read font_file; do
         TARGET="${FONTS_LOCAL_DIR}"
         [[ ${font_file} =~ "/static/" ]] && TARGET="${TARGET}/static"
-        ln -sf "${font_file}" "${TARGET}" >> "${LOG_FILE}"
+        ln -sfv "${font_file}" "${TARGET}" >> "${LOG_FILE}"
     done
 done
 
