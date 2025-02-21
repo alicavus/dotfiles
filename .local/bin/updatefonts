@@ -1,0 +1,41 @@
+#! /bin/bash
+
+[[ $(whoami) == "root" ]] && echo "You should not run this script as root" && exit 
+
+FONTS_LOCAL_DIR="${HOME}/.local/share/fonts"
+GOOGLE_FONTS_DIR="${HOME}/.local/share/google-fonts"
+WINDOWS_FONTS_DIR="/mnt/WINDOWS/Windows/Fonts"
+LOG_FILE="${HOME}/.local/share/updatefonts.log"
+
+time=$(date +"%Y-%m-%d %H:%M:%S")
+echo "____Begin: $time" >>  "${LOG_FILE}"
+
+if [[ ! -d "${GOOGLE_FONTS_DIR}/.git" ]]; then
+    rm -rf "${GOOGLE_FONTS_DIR}" >> "${LOG_FILE}"
+    mkdir -pv "${GOOGLE_FONTS_DIR}" >> "${LOG_FILE}"
+    git clone --quiet https://github.com/google/fonts "${GOOGLE_FONTS_DIR}" >> "${LOG_FILE}"
+else
+    CUR_DIR=$PWD
+    cd "${GOOGLE_FONTS_DIR}"
+    git pull --quiet --ff-only >> "${LOG_FILE}"
+    cd "${CUR_DIR}"
+fi
+
+if [[ ! -d "${FONTS_LOCAL_DIR}/static" ]]; then
+    rm -rf "${FONTS_LOCAL_DIR}" >> "${LOG_FILE}"
+    mkdir -pv "${FONTS_LOCAL_DIR}/static" >> "${LOG_FILE}"
+fi
+
+for fnt in .ttf .ttc .otf; do
+    if [[ -d "${WINDOWS_FONTS_DIR}" ]]; then
+        find "${WINDOWS_FONTS_DIR}" -iname *$fnt -exec cp -v {} "${FONTS_LOCAL_DIR}" \; >> "${LOG_FILE}"
+    fi
+    find "${GOOGLE_FONTS_DIR}" -iname *$fnt | while read font_file; do
+        TARGET="${FONTS_LOCAL_DIR}"
+        [[ ${font_file} =~ "/static/" ]] && TARGET="${TARGET}/static"
+        ln -sf "${font_file}" "${TARGET}" >> "${LOG_FILE}"
+    done
+done
+
+time=$(date +"%Y-%m-%d %H:%M:%S")
+echo "____End: $time" >>  "${LOG_FILE}"
