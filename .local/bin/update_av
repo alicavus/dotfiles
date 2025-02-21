@@ -1,0 +1,34 @@
+#!/bin/bash -e
+
+[[ `whoami` == "root" ]] && exit
+
+KRD_URL="https://rescuedisk.s.kaspersky-labs.com/latest/krd.iso"
+AVIRA_URL="https://download.avira.com/download/rescue-system/avira-rescue-system.iso"
+
+
+dl(){
+    URL=$*
+    BASE=${URL##*/}
+    BASENAME=${BASE%.iso}
+    OF="$HOME/Downloads/UNIX/${BASE}"
+    TG="$HOME/Downloads/UNIX/${BASENAME}-$(date '+%F-%H-%M-%S').iso"
+    CURL="curl -s -o $TG $URL"
+    eval $CURL
+    _OFS=$(sha1sum $OF)
+    _TGS=$(sha1sum $TG)
+    OFS=($_OFS)
+    TGS=($_TGS)
+    
+    if [[ -n ${TGS[0]} ]] && [[ -n ${OFS[0]} ]]; then
+        if [[ ${OFS[0]} == ${TGS[0]} ]]; then
+            echo "${BASE} is up to date."
+            rm "$TG";
+        else
+            mv "$TG" "$OF"
+            echo "${BASE} updated."
+        fi
+    fi
+}
+
+dl $AVIRA_URL
+dl $KRD_URL
