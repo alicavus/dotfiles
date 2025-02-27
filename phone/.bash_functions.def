@@ -1,0 +1,143 @@
+push() {
+    p=$PWD
+    cd `sd`/Счет*
+    c=$*
+    if [[ -z $c ]]; then
+        c=$(rg --max-count=1 `date +.%m.%Y` `date +%Y.%m`/разходи)
+        [[ -z $c ]] && c="`date +%Y.%m.%d`"
+    fi
+    git add \*
+    git commit -m "$c"
+    ! git push && echo "Warning! Push failed"
+    cd $p
+}
+
+pull() {
+    p=$PWD
+    cd `sd`/Счет*
+    ! git pull && echo "Warning! Pull failed"
+    cd $p
+}
+
+gs() {
+    rg -NI "$*" `sd`/Счетоводство | sed -e "s#`sd`/Счетоводство/##" -e "s:/: :g" -e "s#:#:\n#"
+}
+
+razhod() {
+    s=0
+    declare -i dc=0
+    cat `sd`/Счетоводство/`date +%Y.%m`/разходи |
+        while read ln; do
+            [[ $ln =~ ">" ]] || [[ -z $ln ]] && continue
+            [[ $ln =~ "`date +.%m.%Y`" ]] && dc=$dc+1 && continue
+            [[ $ln =~ "----" ]] || [[ $dc == 2 ]] && break
+            ln=${ln##*- }
+            ln=${ln/\ лв*/}
+            s=`echo "$ln+($s)" | bc 2>/dev/null`
+            echo $s
+        done | tail -n 1
+}
+
+presmetni() {
+    f="$1"
+    m="$2"
+    s=0
+    [[ -z $m ]] && m=`date +%Y.%m`
+    fd -p "$m/$f\$" `sd`/Счетоводство -X cat |
+        rg [\-0-9\.]*лв[\.]*[[:blank:]]*$ |
+            sed -e "s:=:-:g" -e "s#[[:blank:]]\{2,\}# #g" -e "s#лв[\.]*[[:space:]]*\$##g" |
+                while read ln; do
+                    [[ $ln =~ ">" || $ln =~ "Общо:" ]] && continue
+                    ln=${ln##*- }
+                    ln=${ln%[[:blank:]]*}
+                    s=`echo "$ln+($s)" | bc 2>/dev/null`
+                    echo $s
+                done | tail -n 1
+}
+
+balans() {
+    f=$*
+    declare -i mn=`date +%-m`
+    [[ $mn -gt 1 ]] && mn=$(($mn-1))
+    m="$mn"
+    [[ $mn -lt 10 ]] && m="0$m"
+    [[ -z $f ]] && f=`date +%Y.$m`
+    echo "Баланс за $f:"
+    echo "`prihodi $f` - `razhodi $f`" | bc
+}
+
+gitlog() {
+    p=$PWD
+    cd `sd`/Счет*
+    git diff `git rev-list --all --max-count=15 | tail -n 1`
+    cd $p
+
+}
+
+round() {
+    n=$1
+    declare -i b=`echo "${n%.*}" | sed -e "s:^0*::" -e "s:^-0*:-:"`
+    rn="${n#*.}"
+    [[ ${rn:0:1} -gt 0 ]] && rem="${rn::2}"
+    [[ ${rn:0:1} -eq 0 ]] && rem="${rn:1:1}"
+    declare -i r=`echo "${rn:2}" | sed "s:^0*::"`
+    if [[ $r -gt 0 ]]; then
+        (( rem++ ))
+        if [[ $rem -eq 100 ]]; then
+            rem=0
+            [[ $b -lt 0 ]] && (( b-- )) || (( b++ ))
+        fi
+    fi
+    [[ $rem -lt 10 ]] && rem="0$rem"
+    echo "$b.$rem"
+}
+
+sr() {
+    r=`echo "scale=7; $(razhodi) / $(date +%-d)" | bc 2>/dev/null`
+    m=31; mn=`date +%-m`
+    [[ $mn -lt 12 ]] && (( mn++ )) &&  m=`date --date="$(date +%Y)-$mn-01 - 1 day" +%-d`
+    q=`echo "$r * $m" | bc 2>/dev/null`
+    echo "Среден разход на ден: `round $r`"
+    echo "Очакван общ Разход: `round $q`"
+    echo ""
+    echo "Разход за деня: `razhod`"
+    echo "Общ разход за месеца: `razhodi`"
+}
+
+ck() {
+    m="$1"
+    [[ -z $m ]] && m=`date +%Y.%m`
+    fd -p "$m/разходи\$" `sd`/Счетоводство -X cat |
+    while read ln; do
+        [[ $ln =~ "----" || $ln =~ ">" || -z $ln ]] && continue
+        echo $ln | rg -q '[0-9]{2}\.[0-9]{2}\.202[0-9]{1}[[:blank:]]*г*\.*'
+        [[ $? -eq 0 ]] && gun=$ln && s=0 && continue
+        ln=`echo $ln | sed "s:=:-:g"`
+        ln=${ln/=/-}
+        ln=${ln##*- }
+        ln=${ln%лв*}
+        if [[ ! $ln =~ "Общо:" ]]; then
+            s=`echo "$ln+($s)" | bc`
+        else
+            ln="${ln#Общо: }"
+            d=`echo "${ln#Общо:}" | sed "s/[[:blank:]]\{1,\}//"`
+            [[ $s != $d ]] && echo "Грешка $gun: \"$d\" \"$s\""
+        fi
+    done
+    cko $m
+    razhodi $m
+}
+
+cko () {
+    m="$1"
+    s=0
+    [[ -z $m ]] && m=`date +%Y.%m`
+    fd -p "$m/разходи\$" `sd`/Счетоводство -X cat |
+        rg Общо: | while read ln; do
+            ln=${ln##*:}
+            ln=${ln% лв*};
+            s=`echo "$ln+($s)" | bc`;
+            echo $s
+        done |
+    tail -n 1 
+}

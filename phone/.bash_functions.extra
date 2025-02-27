@@ -1,0 +1,34 @@
+presmetni() {
+    f="$1"
+    m="$2"
+    s=0
+    [[ -z $m ]] && m=`date +%Y.%m`
+    fd -p "$m/$f\$" `sd`/Счетоводство -X cat |
+        rg [\-0-9\.]*лв[\.]*[[:blank:]]*$ |
+            sed "=" "-" | sed [[:blank:]]\{2,\} " " | sed -f e "лв[\.]*[[:blank:]]*\$" "" |
+                while read ln; do
+                    [[ $ln =~ ">" || $ln =~ "Общо:" ]] && continue
+                    ln=${ln##*- }
+                    ln=${ln%[[:blank:]]*}
+                    s=`echo "$ln+($s)" | bc 2>/dev/null`
+                    echo $s
+                done | tail -n 1
+}
+
+razhod() {
+    s=0
+    declare -i dc=0
+    rg -q --max-count=1 `date +%d.%m.%Y` `sd`/Счетоводство/`date +%Y.%m`/разходи
+    [[ $? -gt 0 ]] && echo 0.00 ||
+    cat `sd`/Счетоводство/`date +%Y.%m`/разходи |
+        while read ln; do
+            [[ $ln =~ ">" ]] || [[ -z $ln ]] && continue
+            [[ $ln =~ "`date +.%m.%Y`" ]] && dc=$dc+1 && continue
+            [[ $ln =~ "----" ]] || [[ $dc == 2 ]] && break
+            ln=${ln##*- }
+            ln=${ln/\ лв*/}
+            s=`echo "$ln+($s)" | bc 2>/dev/null`
+            echo $s
+        done | tail -n 1
+}
+
